@@ -1,73 +1,59 @@
 import React from "react";
 
-function findCalories(nutrients) {
-    if (!nutrients) return null;
-    const cal = nutrients.find(
-        (n) => n.name && n.name.toLowerCase() === "calories"
-    );
-    return cal ? cal.amount : null;
-}
-
+/**
+ * NutritionSummary
+ *
+ * Props:
+ * - recipe: RecipeDto with totalCalories and nutrition.nutrients
+ */
 function NutritionSummary({ recipe }) {
     if (!recipe) return null;
 
-    const totalCalories = recipe.totalCalories;
     const nutrients = recipe.nutrition?.nutrients || [];
-    const caloriesFromNutrients = findCalories(nutrients);
 
-    const topNutrients = nutrients.slice(0, 5); // show a few
+    // Prefer recipe.totalCalories, fallback to "Calories" nutrient if needed
+    let totalCalories = recipe.totalCalories;
+    if ((totalCalories === null || totalCalories === undefined) && nutrients.length > 0) {
+        const cal = nutrients.find((n) => n.name === "Calories");
+        totalCalories = cal ? cal.amount : undefined;
+    }
+
+    const roundedCalories =
+        totalCalories !== null && totalCalories !== undefined
+            ? Math.round(totalCalories)
+            : null;
+
+    // Show just a few key nutrients besides calories
+    const importantNutrients = ["Protein", "Fat", "Carbohydrates"];
+    const keyNutrients = nutrients.filter((n) =>
+        importantNutrients.includes(n.name)
+    );
 
     return (
-        <section
-            style={{
-                marginTop: "1rem",
-                padding: "0.75rem",
-                borderRadius: "8px",
-                border: "1px solid #eee",
-                backgroundColor: "#fafafa",
-            }}
-        >
-            <h3>Nutrition</h3>
-            {totalCalories != null && (
-                <p style={{ margin: "0 0 0.5rem 0" }}>
-                    <strong>Total calories:</strong> {Math.round(totalCalories)} kcal
-                </p>
-            )}
-            {caloriesFromNutrients != null && totalCalories != null && (
-                <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.85rem", color: "#555" }}>
-                    (Calories from nutrients list: {Math.round(caloriesFromNutrients)} kcal)
-                </p>
-            )}
+        <section className="nutrition-summary">
+            {/* 🔥 Highlighted total calories card */}
+            <div className="nutrition-total">
+                <span className="nutrition-total-label">Total calories</span>
+                {roundedCalories !== null ? (
+                    <span className="nutrition-total-value">
+            {roundedCalories} kcal
+          </span>
+                ) : (
+                    <span className="nutrition-total-value">N/A</span>
+                )}
+            </div>
 
-            {topNutrients.length > 0 && (
-                <table
-                    style={{
-                        width: "100%",
-                        borderCollapse: "collapse",
-                        fontSize: "0.85rem",
-                    }}
-                >
-                    <thead>
-                    <tr>
-                        <th style={{ textAlign: "left", borderBottom: "1px solid #ddd" }}>
-                            Nutrient
-                        </th>
-                        <th style={{ textAlign: "right", borderBottom: "1px solid #ddd" }}>
-                            Amount
-                        </th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {topNutrients.map((n) => (
-                        <tr key={n.name}>
-                            <td style={{ padding: "0.25rem 0" }}>{n.name}</td>
-                            <td style={{ padding: "0.25rem 0", textAlign: "right" }}>
-                                {n.amount} {n.unit}
-                            </td>
-                        </tr>
+            {keyNutrients.length > 0 && (
+                <div className="nutrition-grid">
+                    {keyNutrients.map((n) => (
+                        <div key={n.name} className="nutrition-item">
+                            <div className="nutrition-item-name">{n.name}</div>
+                            <div className="nutrition-item-value">
+                                {Math.round(n.amount)} {n.unit}
+                            </div>
+                        </div>
                     ))}
-                    </tbody>
-                </table>
+                </div>
             )}
         </section>
     );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import SearchBar from "../components/SearchBar";
 import RecipeList from "../components/RecipeList";
 import IngredientList from "../components/IngredientList";
@@ -31,6 +31,51 @@ function getCleanSummaryHtml(summary) {
     return s;
 }
 
+/**
+ * Convert an Axios error into a user-friendly message.
+ * Handles:
+ * - Spoonacular daily limit (402 Payment Required)
+ * - Backend message field
+ * - Network errors
+ */
+function getFriendlyError(err, fallbackMessage) {
+    // Axios error with response from backend
+    if (err && err.response && err.response.data) {
+        const data = err.response.data;
+        const rawMessage =
+            typeof data.message === "string" && data.message.trim().length > 0
+                ? data.message
+                : null;
+
+        // Detect Spoonacular daily limit by status or message content
+        const status = err.response.status;
+        const isQuotaError =
+            status === 402 ||
+            (rawMessage &&
+                rawMessage.toLowerCase().includes("daily points limit"));
+
+        if (isQuotaError) {
+            return (
+                "We’ve reached the daily usage limit for the recipe provider. " +
+                "Please try again later (usually after the daily reset)."
+            );
+        }
+
+        // Generic backend message
+        if (rawMessage) {
+            return rawMessage;
+        }
+    }
+
+    // Network error: no response received
+    if (err && err.request && !err.response) {
+        return "Unable to reach the server. Please check your internet connection and try again.";
+    }
+
+    // Fallback if nothing else matched
+    return fallbackMessage;
+}
+
 function SearchPage() {
     const [lastQuery, setLastQuery] = useState("");
     const [recipes, setRecipes] = useState([]); // RecipeDto[]
@@ -47,6 +92,11 @@ function SearchPage() {
     const [liveQuery, setLiveQuery] = useState("");
     const [suggestions, setSuggestions] = useState([]);
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+
+    // Ref for the details panel (to scroll to it)
+    const detailsRef = useRef(null);
+    // Only scroll when a new recipe is selected (not on every nutrition update)
+    const [shouldScrollToDetails, setShouldScrollToDetails] = useState(false);
 
     const handleQueryChange = (value) => {
         setLiveQuery(value);
@@ -82,6 +132,7 @@ function SearchPage() {
                 setSuggestions(titles);
             } catch (err) {
                 console.error("Failed to fetch suggestions", err);
+                // For suggestions, we don't want a big global error banner.
                 setSuggestions([]);
             } finally {
                 setLoadingSuggestions(false);
@@ -120,7 +171,9 @@ function SearchPage() {
             });
         } catch (err) {
             console.error(err);
-            setError("Failed to fetch recipes. Please try again.");
+            setError(
+                getFriendlyError(err, "Failed to fetch recipes. Please try again.")
+            );
         } finally {
             setLoadingSearch(false);
         }
@@ -164,9 +217,14 @@ function SearchPage() {
 
             const detailed = (data.results && data.results[0]) || null;
             setSelectedRecipe(detailed);
+
+            // We want to scroll after loading a new recipe
+            setShouldScrollToDetails(true);
         } catch (err) {
             console.error(err);
-            setError("Failed to load recipe details.");
+            setError(
+                getFriendlyError(err, "Failed to load recipe details. Please try again.")
+            );
         } finally {
             setLoadingDetails(false);
         }
@@ -192,6 +250,7 @@ function SearchPage() {
 
             const updated = (data.results && data.results[0]) || null;
             if (updated) {
+                // We update selectedRecipe, but we do NOT set shouldScrollToDetails here
                 setSelectedRecipe((prev) =>
                     prev
                         ? {
@@ -204,13 +263,30 @@ function SearchPage() {
             }
         } catch (err) {
             console.error(err);
-            setError("Failed to recalculate nutrition.");
+            setError(
+                getFriendlyError(
+                    err,
+                    "Failed to recalculate nutrition. Please try again."
+                )
+            );
         } finally {
             setLoadingNutrition(false);
         }
     };
 
     const cleanSummaryHtml = getCleanSummaryHtml(selectedRecipe?.summary);
+
+    // Scroll to details ONLY when a new recipe was selected (flag is true)
+    useEffect(() => {
+        if (selectedRecipe && shouldScrollToDetails && detailsRef.current) {
+            detailsRef.current.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+            });
+            // reset the flag so subsequent updates (like nutrition) don't scroll
+            setShouldScrollToDetails(false);
+        }
+    }, [selectedRecipe, shouldScrollToDetails]);
 
     return (
         <div>
@@ -227,8 +303,14 @@ function SearchPage() {
                 suggestions.length === 0 &&
                 !loadingSearch && <p className="hint-text">Finding suggestions...</p>}
 
+            {/* 🔹 Global error banner */}
+            {error && (
+                <div className="error-banner" role="alert">
+                    {error}
+                </div>
+            )}
+
             {loadingSearch && <p>Loading recipes...</p>}
-            {error && <p className="error-text">{error}</p>}
 
             {!loadingSearch && !error && !lastQuery && (
                 <p className="hint-text">
@@ -248,7 +330,6 @@ function SearchPage() {
                         <strong>{lastQuery}</strong>
                     </p>
 
-                    {/* 🔹 Pagination controls */}
                     <Pagination
                         totalResults={meta?.totalResults || 0}
                         offset={meta?.offset || 0}
@@ -264,7 +345,7 @@ function SearchPage() {
             {loadingDetails && <p>Loading recipe details...</p>}
 
             {selectedRecipe && (
-                <div className="details-panel">
+                <div className="details-panel" ref={detailsRef}>
                     <h2>{selectedRecipe.title}</h2>
                     <p className="recipe-meta">
                         {selectedRecipe.readyInMinutes && (
