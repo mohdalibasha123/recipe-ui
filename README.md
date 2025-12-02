@@ -15,6 +15,13 @@ The frontend:
 The React app communicates **only** with the Spring Boot backend under `/api/recipes/...`.  
 The backend is the only component that talks to the Spoonacular API and holds the API key.
 
+
+## GitHub Repository
+
+- FrontEnd repository: [https://github.com/mohdalibasha123/recipe-ui](https://github.com/mohdalibasha123/recipe-ui)
+- Backend repository: [https://github.com/mohdalibasha123/recipe](https://github.com/mohdalibasha123/recipe)
+
+
 ---
 
 ## Setup Instructions
